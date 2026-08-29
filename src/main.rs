@@ -8,23 +8,26 @@ struct Job {
 #[tokio::main]
 async fn main() {
     //Create tx, create rx
-    let job = Job { id: 1 };
     let (tx, mut rx) = mpsc::channel::<Job>(3);
-
-    // Send the job to the channel
-    if let Err(_) = tx.send(job).await {
-        println!("Failed to send job");
-    }
-    //receive the job from the channel
-    tokio::spawn(async move {
-        if let Some(received_job) = rx.recv().await {
+    let handle = tokio::spawn(async move {
+        while let Some(received_job) = rx.recv().await {
             println!("Job ID {:?} received", received_job.id);
-            return;
         }
     });
+    for i in 0..3 {
+        let job = Job { id: i };
 
-    // Wait for a second to allow the spawned task to complete
-    tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
+        // Send the job to the channel
+        if let Err(e) = tx.send(job).await {
+            println!("Failed to send job: {:?}", e);
+        }
+    }
+    // Close the channel by dropping the sender so receiver can exit the loop
+    drop(tx);
+
+    if let Err(e) = handle.await {
+        println!("Error: {:?}", e);
+    }
 }
 
 // Job
